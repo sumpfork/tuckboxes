@@ -1,0 +1,10 @@
+.bzr
+*.pdf
+*.jpg
+*.png
+*.xcf
+*.pxm
+*.zip
+*~
+.vscode
+
