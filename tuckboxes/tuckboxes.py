@@ -23,11 +23,7 @@ class TuckBoxGenerator:
                  endHorizontalMargin=0,
                  canvas=None):
         self.pagesize = landscape(pagesize)
-        if canvas is None:
-            assert fname
-            self.canvas = pdfgcanvas.Canvas(fname, pagesize=self.pagesize)
-        else:
-            self.canvas = canvas
+        self.canvas = canvas
         self.filename = fname
         self.pageMargin = 2 * cm
         self.width = width
@@ -44,19 +40,20 @@ class TuckBoxGenerator:
         self.preserveEndAspect = preserveEndAspect
         self.endVerticalMargin = endVerticalMargin
         self.endHorizontalMargin = endHorizontalMargin
+        self.is_sample = False
 
     @staticmethod
     def fromRawData(raw_width,
                     raw_height,
                     raw_depth,
-                    fname,
-                    fIm,
-                    sIm,
-                    bIm,
-                    eIm,
-                    fillColour,
-                    preserveSideAspect,
-                    preserveEndAspect,
+                    fname=None,
+                    fIm=None,
+                    sIm=None,
+                    bIm=None,
+                    eIm=None,
+                    fillColour=None,
+                    preserveSideAspect=False,
+                    preserveEndAspect=False,
                     pagesize='letter'):
         fImRead = ImageReader(PIL.Image.open(fIm)) if fIm else None
         sImRead = ImageReader(PIL.Image.open(sIm)) if sIm else None
@@ -66,15 +63,42 @@ class TuckBoxGenerator:
         ps = LETTER
         if pagesize == 'A4':
             ps = A4
-        return TuckBoxGenerator(raw_width * cm, raw_height * cm,
-                                raw_depth * cm, fname, sImRead, fImRead,
-                                bImRead, eImRead,
-                                fillColour=fillColour,
-                                preserveSideAspect=preserveSideAspect,
-                                preserveEndAspect=preserveEndAspect,
-                                pagesize=ps)
+        return TuckBoxGenerator(
+            raw_width * cm,
+            raw_height * cm,
+            raw_depth * cm,
+            fname,
+            sImRead,
+            fImRead,
+            bImRead,
+            eImRead,
+            fillColour=fillColour,
+            preserveSideAspect=preserveSideAspect,
+            preserveEndAspect=preserveEndAspect,
+            pagesize=ps)
+
+    def drawImage(self, image, x, y, w, h, preserveAspect, tag):
+        self.canvas.saveState()
+        if self.is_sample:
+            if tag not in ['Side', 'End']:
+                self.canvas.setFillColorRGB(1, 1, 1)
+                self.canvas.rect(x, y, w, h, fill=1)
+            self.canvas.setFillColorRGB(0.0, 0.0, 0.0)
+            self.canvas.setFontSize(15)
+            self.canvas.drawCentredString(x + w / 2., y + h / 2., tag)
+        else:
+            self.canvas.drawImage(
+                image,
+                x,
+                y,
+                w,
+                h,
+                preserveAspectRatio=preserveAspect,
+                mask='auto')
+        self.canvas.restoreState()
 
     def drawEnd(self, isTop=False, isGlue=False):
+        self.canvas.saveState()
         if self.fillColour:
             if len(self.fillColour) == 4:
                 self.canvas.setFillColorCMYK(*self.fillColour)
@@ -87,7 +111,6 @@ class TuckBoxGenerator:
                 self.width,
                 fill=True,
                 stroke=False)
-        self.canvas.saveState()
         if isGlue:
             margin = 7
             self.canvas.setFillColorCMYK(0, 0, 0, 0.1)
@@ -105,20 +128,21 @@ class TuckBoxGenerator:
             self.canvas.drawCentredString(
                 -self.width / 2 - self.flapDepth, -self.depth / 2 - 5,
                 "Cut Solid. Fold Dashed. Glue This.")
-        elif self.sideImage:
+        elif self.sideImage or self.is_sample:
             if isTop:
                 self.canvas.scale(1, -1)
                 self.canvas.translate(0, -self.width - 2 * self.flapDepth)
             self.canvas.rotate(-90)
-            self.canvas.drawImage(
-                self.sideImage,
-                -self.width - self.flapDepth + self.endHorizontalMargin,
-                self.endVerticalMargin,
-                self.width - self.endHorizontalMargin,
-                self.depth - 2 * self.endVerticalMargin,
-                preserveAspectRatio=self.preserveEndAspect,
-                mask='auto')
+            x = -self.width - self.flapDepth + self.endHorizontalMargin
+            y = self.endVerticalMargin
+            w = self.width - self.endHorizontalMargin
+            h = self.depth - 2 * self.endVerticalMargin
+            self.drawImage(self.sideImage, x, y, w, h, self.preserveEndAspect,
+                           'End')
+
         self.canvas.restoreState()
+        self.canvas.saveState()
+
         if not isGlue:
             self.canvas.line(0, 0, self.depth, 0)
             self.canvas.line(0, 0, 0, self.flapDepth)
@@ -144,6 +168,7 @@ class TuckBoxGenerator:
         self.canvas.line(0, self.flapDepth, self.depth, self.flapDepth)
         self.canvas.line(0, self.width + self.flapDepth, self.depth,
                          self.width + self.flapDepth)
+        self.canvas.restoreState()
 
     def drawSide(self, hasFlap=False, isGlue=False):
         self.canvas.saveState()
@@ -171,7 +196,7 @@ class TuckBoxGenerator:
             self.canvas.drawCentredString(
                 self.height / 2, self.depth / 2 - 5,
                 "Cut Solid. Fold Dashed. Glue This.")
-        elif self.endImage or self.sideImage:
+        elif self.endImage or self.sideImage or self.is_sample:
             if self.endImage:
                 image = self.endImage
             else:
@@ -181,15 +206,14 @@ class TuckBoxGenerator:
                 self.canvas.rotate(180)
                 self.canvas.scale(1, -1)
                 self.canvas.translate(-self.height, 0)
-            self.canvas.drawImage(
-                image,
-                margin,
-                margin,
-                self.height - 2 * margin,
-                self.depth - 2 * margin,
-                preserveAspectRatio=self.preserveSideAspect,
-                mask='auto')
+
+            self.drawImage(image, margin, margin, self.height - 2 * margin,
+                           self.depth - 2 * margin, self.preserveSideAspect,
+                           'Side')
+
         self.canvas.restoreState()
+        self.canvas.saveState()
+
         arcWidth = 0.5 * self.flapDepth
         self.canvas.line(0, 0, 0, self.depth)
         if not hasFlap:
@@ -213,39 +237,29 @@ class TuckBoxGenerator:
         self.canvas.line(0, self.depth, self.height, self.depth)
         if hasFlap:
             self.canvas.line(arcWidth, 0, self.height - arcWidth, 0)
+        self.canvas.restoreState()
 
     def drawFront(self):
-        if self.frontImage:
+        self.canvas.saveState()
+        if self.frontImage or self.is_sample:
             margin = 0
-            self.canvas.saveState()
             # self.canvas.rotate(90)
-            self.canvas.drawImage(
-                self.frontImage,
-                margin,
-                margin,
-                self.height - 2 * margin,
-                self.width - 2 * margin,
-                preserveAspectRatio=False,
-                mask='auto')
-            self.canvas.restoreState()
+            self.drawImage(self.frontImage, margin, margin,
+                           self.height - 2 * margin, self.width - 2 * margin,
+                           False, 'Front')
+        self.canvas.restoreState()
 
     def drawBack(self):
-        if self.backImage:
+        self.canvas.saveState()
+        if self.backImage or self.is_sample:
             margin = 0
-            self.canvas.saveState()
             # if self.backImage == self.frontImage:
             #     self.canvas.translate(self.height-2*margin,self.width-2*margin)
             #     self.canvas.rotate(180)
             # self.canvas.rotate(90)
-            self.canvas.drawImage(
-                self.backImage,
-                margin,
-                margin,
-                self.height - 2 * margin,
-                self.width - 2 * margin,
-                preserveAspectRatio=False,
-                mask='auto')
-            self.canvas.restoreState()
+            self.drawImage(self.backImage, margin, margin,
+                           self.height - 2 * margin, self.width - 2 * margin,
+                           False, 'Back')
         fingerWidth = min(self.depth / 1.5, 1.25 * cm)
         centre = self.height / 2.0
         self.canvas.line(0, self.width, centre - fingerWidth / 2.0, self.width)
@@ -268,10 +282,16 @@ class TuckBoxGenerator:
             extent=180,
             stroke=0,
             fill=1)
+        self.canvas.restoreState()
 
     def generate(self):
         if self.filename:
             print('generating {}'.format(self.filename))
+
+        if self.canvas is None:
+            assert self.filename
+            self.canvas = pdfgcanvas.Canvas(
+                self.filename, pagesize=self.pagesize)
         self.canvas.saveState()
         self.canvas.translate(self.pageMargin, self.pageMargin)
 
@@ -342,6 +362,24 @@ class TuckBoxGenerator:
     def close(self):
         self.canvas.save()
 
+    def generate_sample(self):
+        import io
+        from wand.image import Image
+        buf = io.BytesIO()
+        tmp_fname = self.filename
+        self.filename = buf
+        self.is_sample = True
+        self.generate()
+        self.close()
+        self.filename = tmp_fname
+        self.is_sample = False
+        sample_out = io.BytesIO()
+        with Image(blob=buf.getvalue(), resolution=75) as sample:
+            sample.rotate(-90)
+            sample.format = 'png'
+            sample.save(sample_out)
+            return sample_out.getvalue()
+
 
 def main():
     tuck = TuckBoxGenerator(
@@ -355,6 +393,19 @@ def main():
         preserveEndAspect=True,
         preserveSideAspect=True,
         fillColour=(0.77, 0.74, 0.1, 0.1))
+    # tuck = TuckBoxGenerator.fromRawData(
+    #     6.7 * cm,
+    #     10.2 * cm,
+    #     1.6 * cm,
+    #     preserveEndAspect=True,
+    #     preserveSideAspect=True,
+    #     fillColour=(0.77, 0.74, 0.6))
+    # with open('sample.png', 'wb') as f:
+    #     d = tuck.generate_sample()
+    #     f.write(d)
+    # import sys
+    # sys.exit()
+
     c = tuck.generate()
 
     tuck = TuckBoxGenerator(
