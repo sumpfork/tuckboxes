@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '0.0.1'
+version = '0.1.0'
 
 setup(
     name="tuckboxes",
@@ -13,7 +13,8 @@ setup(
     packages=find_packages(exclude=['tests']),
     install_requires=["reportlab>=3.4.0",
                       "Pillow>=4.1.0",
-                      "numpy"],
+                      "numpy",
+                      "click"],
     url='http://domtabs.sandflea.org',
     include_package_data=True,
     author="Peter Gorniak",
