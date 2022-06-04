@@ -423,17 +423,17 @@ class TuckBoxGenerator:
 
 
 @click.command()
-@click.option("--width", default=6.4)
-@click.option("--height", default=8.8)
-@click.option("--depth", default=3)
+@click.option("--width", default=6.4, help="width in centimers")
+@click.option("--height", default=8.8, help="height in centimers")
+@click.option("--depth", default=3.0, help="depth in centimers")
 @click.option("--outfile", default="tuckbox.pdf")
-@click.option("--front_image")
-@click.option("--back_image")
-@click.option("--side_image")
-@click.option("--end_image")
+@click.option("--front_image", help="file path")
+@click.option("--back_image", help="file path")
+@click.option("--side_image", help="file path")
+@click.option("--end_image", help="file path")
 @click.option("--preserve_end_aspect", default=False)
 @click.option("--preserve_side_aspect", default=False)
-@click.option("--fill_colour", default="#FFFFFF")
+@click.option("--fill_colour", default="#FFFFFF", help="RGB hex string for side/end background colour")
 def main(
     width,
     height,
